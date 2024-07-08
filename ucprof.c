@@ -51,6 +51,6 @@ void __cyg_profile_func_exit(void *this_fn, void *call_site) {
 uint8_t ucprof_rtt_buffer[UCPROF_CONFIG_RTT_BUFFER_SIZE];
 
 int ucprof_init() {
-    return SEGGER_RTT_ConfigUpBuffer(rtt_buffer_index, "ucprof", ucprof_rtt_buffer, sizeof(ucprof_rtt_buffer),
+    return SEGGER_RTT_ConfigUpBuffer(ucprof_rtt_buffer_idx, "ucprof", ucprof_rtt_buffer, sizeof(ucprof_rtt_buffer),
                                      SEGGER_RTT_MODE_NO_BLOCK_TRIM);
 }
