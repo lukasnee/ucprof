@@ -206,51 +206,50 @@ class UcProf:
             self.log_info(0, f"{indent}{frames[frame]['name']}")
         self.log_info(0, f"")
 
+    def __log_opening_event(self, severity, verbosity, idx, timestamp, frame, call_stack, frames, suffix=""):
+        indent = '  ' * len(call_stack)
+        self.log(severity, verbosity,
+                 f"{idx:8d}|{timestamp:.9f}|{indent}{frame['name']}{': ' if suffix else ''}{suffix}")
+
+    def __log_closing_event(self, severity, verbosity, idx, timestamp, frame, call_stack, frames, suffix=""):
+        indent = '  ' * len(call_stack)
+        self.log(severity, verbosity,
+                 f"{idx:8d}|{timestamp:.9f}|{indent}~{frame['name']}{': ' if suffix else ''}{suffix}")
+
     def __fix_events(self, events, frames):
         call_stack = []
         fixed_events = []
-        is_broken_part = False
         for idx, event in enumerate(events):
 
-            if is_broken_part:
-
-                if event["type"] == "C":
-                    is_broken_part = False
-                    fixed_events.append(
-                        {"type": "C", "at": event['at'], "frame": self.broken_frame_index})
-                    self.log_error(
-                        1, f"{idx:8d}|{event['at']:.9f}|{'  ' * (len(call_stack) - 1)} {frames[event['frame']]['name']}: Broken part fixed")
-                continue
-
             if event["type"] == "C":
-                # TODO the fixing is not working properly, make it work
+                # TODO think of better ways to handle broken frames
+                # TODO make the breaks more visible in the speedscope GUI
                 if not call_stack:
-                    # raise ValueError("Call stack is empty")
-                    self.log_warning(
-                        1, f"{idx:8d}|{event['at']:.9f}|{'  ' * (len(call_stack) - 1)}{frames[event['frame']]['name']}: Call stack is empty - skipping")
+                    self.__log_closing_event(
+                        "W", 1, idx, event['at'], frames[event['frame']], call_stack, frames, "Call stack is empty - skipping")
                     call_stack = []
                     continue
                 if call_stack[-1] != event["frame"]:
-                    # self.__print_call_stack(call_stack, frames)
                     self.log_warning(
-                        1, f"Call stack is not consistent on {idx} event: closing {event['frame']} ({frames[event['frame']]['name']}) instead of {call_stack[-1]} ({frames[call_stack[-1]]['name']}).")
-                    is_broken_part = True
-                    fixed_events.append(
-                        {"type": "C", "at": event['at'], "frame": self.broken_frame_index})
-                    self.log_error(
-                        1, f"{idx:8d}|{event['at']:.9f}|{'  ' * (len(call_stack) - 1)} {frames[event['frame']]['name']}: Broken part fixed")
-
-                    fixed_events.append(
-                        {"type": "O", "at": event['at'], "frame": self.broken_frame_index})
-                self.log_info(
-                    1, f"{idx:8d}|{event['at']:.9f}|{'  ' * (len(call_stack) - 1)}~{frames[event['frame']]['name']}"[0:120])
+                        1, f"Call stack inconsistent on {idx} event: tried to close '{frames[event['frame']]['name']}' instead of '{frames[call_stack[-1]]['name']}'")
+                    self.log_info(1, "Stack termination (begin)")
+                    for frame in reversed(call_stack):
+                        fixed_events.append(
+                            {"type": "C", "at": event['at'], "frame": frame})
+                        call_stack.pop()
+                        self.__log_closing_event(
+                            "I", 1, idx, event['at'], frames[frame], call_stack, frames)
+                    self.log_info(1, "Stack termination (end)")
+                    continue
                 fixed_events.append(event)
                 call_stack.pop()
+                self.__log_closing_event(
+                    "I", 1, idx, event['at'], frames[event['frame']], call_stack, frames)
             else:
+                self.__log_opening_event(
+                    "I", 1, idx, event['at'], frames[event['frame']], call_stack, frames)
                 fixed_events.append(event)
                 call_stack.append(event["frame"])
-                self.log_info(
-                    1, f"{idx:8d}|{event['at']:.9f}|{'  ' * (len(call_stack) - 1)}{frames[event['frame']]['name']}"[0:120])
 
         # "C" all remaining frames
         for frame in reversed(call_stack):
