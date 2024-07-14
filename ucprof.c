@@ -18,18 +18,29 @@ http://opensource.org/licenses/MIT.
 
 const unsigned ucprof_rtt_buffer_idx = 2;
 
+#pragma pack(push, 1)
+typedef struct profile_packet_ {
+    unsigned char label[4];
+    uint32_t timestamp;
+    uint32_t context;
+    void *this_fn;
+} profile_packet_t;
+#pragma pack(pop)
+
+// Attention: performance is of utmost importance
+
+static profile_packet_t enter_profile_packet_buff = {{'O', '\0', '\0', '\0'}, 0, 0, 0};
+static profile_packet_t exit_profile_packet_buff = {{'C', '\0', '\0', '\0'}, 0, 0, 0};
+
 void __cyg_profile_func_enter(void *this_fn, void *call_site) {
     if (xPortIsInsideInterrupt()) {
         return;
     }
     SEGGER_RTT_LOCK();
-    static const unsigned char label[4] = {'O', 0, 0, 0};
-    SEGGER_RTT_WriteNoLock(ucprof_rtt_buffer_idx, &label, 4);
-    const uint32_t timestamp = SEGGER_SYSVIEW_GET_TIMESTAMP();
-    SEGGER_RTT_WriteNoLock(ucprof_rtt_buffer_idx, &timestamp, 4);
-    const uint32_t context = (uint32_t)xTaskGetCurrentTaskHandle();
-    SEGGER_RTT_WriteNoLock(ucprof_rtt_buffer_idx, &context, 4);
-    SEGGER_RTT_WriteNoLock(ucprof_rtt_buffer_idx, &this_fn, 4);
+    enter_profile_packet_buff.timestamp = SEGGER_SYSVIEW_GET_TIMESTAMP();
+    enter_profile_packet_buff.context = (uint32_t)xTaskGetCurrentTaskHandle();
+    enter_profile_packet_buff.this_fn = this_fn;
+    SEGGER_RTT_WriteNoLock(ucprof_rtt_buffer_idx, &enter_profile_packet_buff, sizeof(enter_profile_packet_buff));
     SEGGER_RTT_UNLOCK();
 }
 
@@ -38,13 +49,10 @@ void __cyg_profile_func_exit(void *this_fn, void *call_site) {
         return;
     }
     SEGGER_RTT_LOCK();
-    static const unsigned char label[4] = {'C', 0, 0, 0};
-    SEGGER_RTT_WriteNoLock(ucprof_rtt_buffer_idx, &label, 4);
-    const uint32_t timestamp = SEGGER_SYSVIEW_GET_TIMESTAMP();
-    SEGGER_RTT_WriteNoLock(ucprof_rtt_buffer_idx, &timestamp, 4);
-    const uint32_t context = (uint32_t)xTaskGetCurrentTaskHandle();
-    SEGGER_RTT_WriteNoLock(ucprof_rtt_buffer_idx, &context, 4);
-    SEGGER_RTT_WriteNoLock(ucprof_rtt_buffer_idx, &this_fn, 4);
+    exit_profile_packet_buff.timestamp = SEGGER_SYSVIEW_GET_TIMESTAMP();
+    exit_profile_packet_buff.context = (uint32_t)xTaskGetCurrentTaskHandle();
+    exit_profile_packet_buff.this_fn = this_fn;
+    SEGGER_RTT_WriteNoLock(ucprof_rtt_buffer_idx, &exit_profile_packet_buff, sizeof(exit_profile_packet_buff));
     SEGGER_RTT_UNLOCK();
 }
 
