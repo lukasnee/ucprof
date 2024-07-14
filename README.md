@@ -21,7 +21,7 @@ Microcontroller C/C++ runtime execution profiling toolkit using GNU instrumentat
 3. Fold stacks of all thread calls in `ucprof.dat` record and export a Speedscope JSON for each thread:
 
     ```bash
-    python3 tools/ucprof/ucprof.py .build/platform/STM32H750/STM32H750.symbols ucprof.dat
+    python3 ucprof.py .build/platform/STM32H750/STM32H750.symbols ucprof.dat
     ```
 
 4. Open `ucprof_*.json`  in [Speedscope](https://www.speedscope.app/).
