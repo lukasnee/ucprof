@@ -40,7 +40,19 @@ class UcProf:
         color = "" if self.args.no_color else color
         self.print(verbosity, f"{color}{type}|", *args, **kwargs)
         if color != "" and color != COLORS['RESET']:
-            self.print(verbosity, f"{color_reset}", **kwargs)
+            self.print(verbosity, f"{COLORS['RESET']}", *args, **kwargs)
+
+    def log(self, type, verbosity, *args, **kwargs):
+        if type == 'E':
+            self.log_error(verbosity, *args, **kwargs)
+        elif type == 'W':
+            self.log_warning(verbosity, *args, **kwargs)
+        elif type == 'I':
+            self.log_info(verbosity, *args, **kwargs)
+        elif type == 'D':
+            self.log_debug(verbosity, *args, **kwargs)
+        elif type == 'T':
+            self.log_trace(verbosity, *args, **kwargs)
 
     def log_error(self, verbosity, *args, **kwargs):
         self.__log(verbosity, 'E', COLORS['RED'], *args, **kwargs)
