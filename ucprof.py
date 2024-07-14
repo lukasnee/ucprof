@@ -328,7 +328,7 @@ class UcProf:
         packets = self.__read_packets_from_file()
         thread_stats = self.__compute_thread_stats(packets)
         events = self.__parse_events_from_packets(symbols, packets)
-        for thread_id in range(len(thread_stats)):
+        for thread_id in range(len(thread_stats) if len(thread_stats) < args.top else args.top):
             context = list(thread_stats.items())[thread_id][0]
             thread_speedscope_dict = self.__make_speedscope_dict_from_events(
                 events, context)
@@ -352,6 +352,8 @@ if __name__ == "__main__":
     parser.add_argument("--fw-base", type=int, default=0x90000000)
     parser.add_argument("--fw-size", type=int, default=0x800000)
     parser.add_argument("--no-color", action="store_true")
+    parser.add_argument("--top", type=int, default=10,
+                        help="Process only the top most eventful threads")
     args = parser.parse_args()
     ucProf = UcProf()
     ucProf.fold_all_stacks(args)
