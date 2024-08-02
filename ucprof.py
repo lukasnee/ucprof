@@ -219,6 +219,7 @@ class UcProf:
     def __fix_events(self, events, frames):
         call_stack = []
         fixed_events = []
+        overflow = False
         for idx, event in enumerate(events):
 
             if event["type"] == "C":
@@ -235,17 +236,28 @@ class UcProf:
                     self.log_info(1, "Stack termination (begin)")
                     for frame in reversed(call_stack):
                         fixed_events.append(
-                            {"type": "C", "at": event['at'], "frame": frame})
+                            {"type": "C", "at": events[idx-1]['at'], "frame": frame})
                         call_stack.pop()
                         self.__log_closing_event(
                             "I", 1, idx, event['at'], frames[frame], call_stack, frames)
                     self.log_info(1, "Stack termination (end)")
+                    fixed_events.append(
+                        {"type": "O", "at": events[idx-1]['at'], "frame": self.overflow_frame_index})
+                    self.__log_opening_event(
+                        "I", 1, idx, event['at'], frames[self.overflow_frame_index], call_stack, frames)
+                    overflow = True
                     continue
                 fixed_events.append(event)
                 call_stack.pop()
                 self.__log_closing_event(
                     "I", 1, idx, event['at'], frames[event['frame']], call_stack, frames)
             else:
+                if overflow:
+                    fixed_events.append(
+                        {"type": "C", "at": event['at'], "frame": self.overflow_frame_index})
+                    self.__log_closing_event(
+                        "I", 1, idx, event['at'], frames[self.overflow_frame_index], call_stack, frames)
+                    overflow = False
                 self.__log_opening_event(
                     "I", 1, idx, event['at'], frames[event['frame']], call_stack, frames)
                 fixed_events.append(event)
@@ -291,8 +303,8 @@ class UcProf:
             frame_index = frame_cache[key]
             dict_events.append(
                 {"type": typ, "at": timestamp, "frame": frame_index})
-        frames.append({"name": "broken", "file": "", "line": 0, "col": 1})
-        self.broken_frame_index = len(frames) - 1
+        frames.append({"name": "OVERFLOW!", "file": "", "line": 0, "col": 1})
+        self.overflow_frame_index = len(frames) - 1
 
         dict_events = self.__fix_events(dict_events, frames)
 
