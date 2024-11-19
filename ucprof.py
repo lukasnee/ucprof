@@ -339,7 +339,6 @@ class UcProf:
     def __export_to_json(self, speedscope_dict, filename):
         with open(filename, "w") as f:
             json.dump(speedscope_dict, f, indent=2)
-        print(f"Exported to {filename}")
 
     def fold_all_stacks(self, args):
         if not args.nm_symbols_path or not args.frame_data_path:
@@ -358,6 +357,8 @@ class UcProf:
                 continue
             filename = f"{args.frame_data_path.split('/')[-1].split('.')[0]}_{thread_id}.json"
             self.__export_to_json(thread_speedscope_dict, filename)
+            print(
+                f"Exported {filename} with {len(thread_speedscope_dict['profiles'][0]['events'])} events")
 
 
 if __name__ == "__main__":
