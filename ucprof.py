@@ -294,7 +294,7 @@ class UcProf:
             return None
 
         # remove all closing events at the beginning
-        while events[0].typ == "C":
+        while len(events) > 1 and events[0].typ == "C":
             events.pop(0)
 
         # remove all frames that have zero start time
