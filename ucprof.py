@@ -369,12 +369,12 @@ if __name__ == "__main__":
     parser.add_argument("--begin", type=float,
                         help="Timestamp from in seconds")
     parser.add_argument("--end", type=float, help="Timestamp to in seconds")
-    parser.add_argument("--clk-freq", type=int, default=480000000,
+    parser.add_argument("--clk_freq", type=int, default=480000000,
                         help="Clock frequency used for timestamps")
     parser.add_argument("--verbosity", "-v", type=int, default=0)
-    parser.add_argument("--fw-base", type=int, default=0x24000000)
-    parser.add_argument("--fw-size", type=int, default=0x80000)
-    parser.add_argument("--no-color", action="store_true")
+    parser.add_argument("--fw_base", type=int, default=0x24000000)
+    parser.add_argument("--fw_size", type=int, default=0x80000)
+    parser.add_argument("--no_color", action="store_true")
     parser.add_argument("--top", type=int, default=10,
                         help="Process only the top most eventful threads")
     args = parser.parse_args()
