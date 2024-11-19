@@ -217,6 +217,16 @@ class UcProf:
                  f"{idx:8d}|{timestamp:.9f}|{indent}~{frame['name']}{': ' if suffix else ''}{suffix}")
 
     def __fix_events(self, events, frames):
+
+        # ensure events are in cronological order by finding last chronological sequence and trimming the rest
+        last_break_idx = 0
+        for idx, event in enumerate(events):
+            if idx == 0:
+                continue
+            if event['at'] < events[idx-1]['at']:
+                last_break_idx = idx
+        events = events[last_break_idx:]
+
         call_stack = []
         fixed_events = []
         overflow = False
