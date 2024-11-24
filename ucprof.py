@@ -283,10 +283,6 @@ class UcProf:
 
     def __make_speedscope_dict_from_events(self, events, context):
 
-        # pick the same time range for all threads
-        startValue = events[0].timestamp
-        endValue = events[-1].timestamp
-
         # filter events by context
         events = [event for event in events if event.context == context]
 
@@ -318,6 +314,10 @@ class UcProf:
         self.overflow_frame_index = len(frames) - 1
 
         dict_events = self.__fix_events(dict_events, frames)
+
+        # pick the same time range for all threads
+        startValue = events[0].timestamp
+        endValue = events[-1].timestamp
 
         return {
             "$schema": "https://www.speedscope.app/file-format-schema.json",
