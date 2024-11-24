@@ -103,6 +103,7 @@ class UcProf:
                 elif typ == b'C\x00\x00\x00':
                     typ = 'C'
                 else:
+                    file.seek(-3, 1)
                     continue
                 cycle_cnt = int.from_bytes(file.read(4), byteorder='little')
                 context = int.from_bytes(file.read(4), byteorder='little')
