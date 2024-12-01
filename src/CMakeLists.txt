@@ -9,14 +9,16 @@ if(NOT TARGET ucprof_config)
   )
 endif()
 
-add_library(ucprof STATIC)
-
-target_sources(ucprof PRIVATE ucprof.c)
-
-target_include_directories(
-  ucprof PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include ${UCPROF_CONFIG_DIR}
-)
-
-target_compile_options(
-  ucprof PRIVATE -finstrument-functions-exclude-file-list=ucprof.c
-)
+if(SEGGER_SYSVIEW_ENABLED)
+  add_library(ucprof STATIC)
+  target_sources(ucprof PRIVATE ucprof.c)
+  target_include_directories(ucprof PUBLIC include)
+  target_compile_options(
+    ucprof PRIVATE -finstrument-functions-exclude-file-list=ucprof
+  )
+  target_link_libraries(ucprof PUBLIC freertos_kernel SeggerSysView ucprof_config)
+else()
+  add_library(ucprof INTERFACE)
+  target_include_directories(ucprof INTERFACE include)
+  target_link_libraries(ucprof INTERFACE freertos_kernel SeggerSysView ucprof_config)
+endif()
