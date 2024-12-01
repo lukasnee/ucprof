@@ -20,3 +20,5 @@ target_include_directories(
 target_compile_options(
   ucprof PRIVATE -finstrument-functions-exclude-file-list=ucprof.c
 )
+
+target_link_libraries(ucprof PUBLIC SysView)
