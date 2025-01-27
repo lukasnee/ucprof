@@ -11,6 +11,7 @@ http://opensource.org/licenses/MIT.
 #include "ucprof_config.h"
 
 #include "SEGGER_RTT.h"
+#include "SEGGER_SYSVIEW.h"
 
 #include "FreeRTOS.h"
 
@@ -36,6 +37,10 @@ void __cyg_profile_func_enter(void *this_fn, void *call_site) {
     if (xPortIsInsideInterrupt()) {
         return;
     }
+    // TODO: investigate if this overhead is necessary or beneficial functionally.
+    // if (SEGGER_SYSVIEW_IsStarted() == 0) {
+    //     return;
+    // }
     SEGGER_RTT_LOCK();
     enter_profile_packet_buff.timestamp = SEGGER_SYSVIEW_GET_TIMESTAMP();
     enter_profile_packet_buff.context = (uint32_t)xTaskGetCurrentTaskHandle();
@@ -48,6 +53,10 @@ void __cyg_profile_func_exit(void *this_fn, void *call_site) {
     if (xPortIsInsideInterrupt()) {
         return;
     }
+    // TODO: investigate if this overhead is necessary or beneficial functionally.
+    // if (SEGGER_SYSVIEW_IsStarted() == 0) {
+    //     return;
+    // }
     SEGGER_RTT_LOCK();
     exit_profile_packet_buff.timestamp = SEGGER_SYSVIEW_GET_TIMESTAMP();
     exit_profile_packet_buff.context = (uint32_t)xTaskGetCurrentTaskHandle();
