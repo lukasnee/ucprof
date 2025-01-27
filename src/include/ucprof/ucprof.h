@@ -7,7 +7,11 @@ http://opensource.org/licenses/MIT.
 
 #pragma once
 
-#ifdef SEGGER_SYSVIEW_ENABLED
+#ifndef SEGGER_SYSVIEW_ENABLED
+
+#define ucprof_init()
+
+#else
 
 /**
  * @brief Initialize ucprof
@@ -15,10 +19,6 @@ http://opensource.org/licenses/MIT.
  * @retval >= 0 - O.K.
  * @retval < 0 - Error
  */
-int ucprof_init();
+void ucprof_init();
 
-#else
-
-#define ucprof_init() 0
-
-#endif
+#endif // SEGGER_SYSVIEW_ENABLED
