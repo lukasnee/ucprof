@@ -14,6 +14,7 @@ http://opensource.org/licenses/MIT.
 #include "SEGGER_SYSVIEW.h"
 
 #include "FreeRTOS.h"
+#include "task.h"
 
 #include <stdint.h>
 
