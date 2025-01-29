@@ -17,6 +17,10 @@ http://opensource.org/licenses/MIT.
 
 #include <stdint.h>
 
+#ifndef UNUSED
+#define UNUSED(x) (void)(x)
+#endif
+
 const unsigned ucprof_rtt_buffer_idx = 2;
 
 #pragma pack(push, 1)
@@ -34,6 +38,7 @@ static profile_packet_t enter_profile_packet_buff = {{'O', '\0', '\0', '\0'}, 0,
 static profile_packet_t exit_profile_packet_buff = {{'C', '\0', '\0', '\0'}, 0, 0, 0};
 
 void __cyg_profile_func_enter(void *this_fn, void *call_site) {
+    UNUSED(call_site);
     if (xPortIsInsideInterrupt()) {
         return;
     }
@@ -50,6 +55,7 @@ void __cyg_profile_func_enter(void *this_fn, void *call_site) {
 }
 
 void __cyg_profile_func_exit(void *this_fn, void *call_site) {
+    UNUSED(call_site);
     if (xPortIsInsideInterrupt()) {
         return;
     }
