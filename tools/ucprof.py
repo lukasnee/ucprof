@@ -4,21 +4,13 @@ import json
 from collections import namedtuple
 import argparse
 import re
+import logging
+
+logger = logging.getLogger(__name__)
 
 Packet = namedtuple("Packet", ["typ", "cycle_cnt", "fn", "context"])
 Symbol = namedtuple("Symbol", ["address", "typ", "fn_name", "file", "line"])
 NM_SYMBOLS_REGEX_PATTERN = r"(?P<address>[0-9a-f]+)\s(?P<typ>\w)\s(?P<fn_name>[^\t\n]*)(\t(?P<file>.*):(?P<line>\d+))?"
-Event = namedtuple("Event", ["timestamp", "typ",
-                   "filename", "line", "name", "context"])
-
-# REPLACE custom logger with python logging module
-COLORS = {
-    'RED': '\033[91m',
-    'YELLOW': '\033[93m',
-    'PURPLE': '\033[95m',
-    'CYAN': '\033[96m',
-    'RESET': '\033[0m'
-}
 
 
 def context_is_interrupt(context):
@@ -27,48 +19,13 @@ def context_is_interrupt(context):
 
 class UcProf:
 
-    def __init__(self):
-        self.args = None
+    def __init__(self, args):
+        self.args = args
         # TODO the following variables should not be class variables
         self._begin_cycle_cnt_offset = None
         self._last_cycle_cnt = 0
-
-    def print(self, verbosity, *args, **kwargs):
-        if self.args.verbosity >= verbosity:
-            print(*args, **kwargs)
-
-    def __log(self, verbosity, type, color, *args, **kwargs):
-        color = "" if self.args.no_color else color
-        self.print(verbosity, f"{color}{type}|", *args, **kwargs)
-        if color != "" and color != COLORS['RESET']:
-            self.print(verbosity, f"{COLORS['RESET']}", *args, **kwargs)
-
-    def log(self, type, verbosity, *args, **kwargs):
-        if type == 'E':
-            self.log_error(verbosity, *args, **kwargs)
-        elif type == 'W':
-            self.log_warning(verbosity, *args, **kwargs)
-        elif type == 'I':
-            self.log_info(verbosity, *args, **kwargs)
-        elif type == 'D':
-            self.log_debug(verbosity, *args, **kwargs)
-        elif type == 'T':
-            self.log_trace(verbosity, *args, **kwargs)
-
-    def log_error(self, verbosity, *args, **kwargs):
-        self.__log(verbosity, 'E', COLORS['RED'], *args, **kwargs)
-
-    def log_warning(self, verbosity, *args, **kwargs):
-        self.__log(verbosity, 'W', COLORS['YELLOW'], *args, **kwargs)
-
-    def log_info(self, verbosity, *args, **kwargs):
-        self.__log(verbosity, 'I', COLORS['RESET'], *args, **kwargs)
-
-    def log_debug(self, verbosity, *args, **kwargs):
-        self.__log(verbosity, 'D', COLORS['PURPLE'], *args, **kwargs)
-
-    def log_trace(self, verbosity, *args, **kwargs):
-        self.__log(verbosity, 'T', COLORS['CYAN'], *args, **kwargs)
+        logging.basicConfig(level=args.log_level,
+                            format="%(levelname)s| %(message)s")
 
     def __parse_nm_symbols(self):
         symbols = []
@@ -89,7 +46,7 @@ class UcProf:
                     while index < len(symbols) and symbol.address > symbols[index].address:
                         index += 1
                     symbols.insert(index, symbol)
-        self.log_info(0, f'Symbols parsed: {len(symbols)}')
+        logger.info(f'Symbols parsed: {len(symbols)}')
         return symbols
 
     def __read_packets_from_file(self):
@@ -110,7 +67,7 @@ class UcProf:
                 context = int.from_bytes(file.read(4), byteorder='little')
                 fn = int.from_bytes(file.read(4), byteorder='little')
                 packets.append(Packet(typ, cycle_cnt, fn, context))
-        self.log_info(0, f'Packets parsed: {len(packets)}')
+        logger.info(f'Packets parsed: {len(packets)}')
         return packets
 
     def __within_begin_boundry(self, timestamp):
@@ -143,24 +100,24 @@ class UcProf:
         for idx, packet in enumerate(packets):
 
             if context_is_interrupt(packet.context):
-                self.log_debug(
-                    2, f'__parse_packets: {idx} packet skipped - interrupt')
+                logger.log(
+                    logging.DEBUG-2, f'__parse_packets: {idx} packet skipped - interrupt')
                 continue
 
             timestamp = self.__calculate_timestamp(packet.cycle_cnt)
             if not self.__within_begin_boundry(timestamp):
-                self.log_debug(
-                    4, f'__parse_packets: {idx} packet skipped - before --begin')
+                logger.log(
+                    logging.DEBUG-4, f'__parse_packets: {idx} packet skipped - before --begin')
                 continue
 
             if not self.__within_end_boundry(timestamp):
-                self.log_debug(
-                    3, f'__parse_packets: {idx} packet skipped - after --end')
+                logger.log(
+                    logging.DEBUG-3, f'__parse_packets: {idx} packet skipped - after --end')
                 break
 
             if not self.__within_fw_boundry(packet.fn):
-                self.log_debug(
-                    2, f'__parse_packets: {idx} packet skipped - not within firmware memory region, {packet.fn:08x}')
+                logger.log(
+                    logging.DEBUG-2, f'__parse_packets: {idx} packet skipped - not within firmware memory region, {packet.fn:08x}')
                 continue
             symbol = next(
                 (s for s in reversed(symbols) if packet.fn >= s.address), None)
@@ -182,13 +139,13 @@ class UcProf:
             profile = next(
                 (p for p in profiles if p['name'] == "0x{:08x}".format(packet.context)), None)
             if not profile:
-                self.log_error(
-                    0, f'Profile not found: {"0x{:08x}".format(packet.context)}')
+                logger.error(
+                    f'Profile not found: {"0x{:08x}".format(packet.context)}')
                 continue
             profile['events'].append(
                 {"type": packet.typ, "at": timestamp, "frame": frame_index})
-            self.log_trace(
-                3, f"{profile['name']}: {packet.typ} {timestamp:.9f} {frame_index}")
+            logger.log(
+                logging.DEBUG-5, f"{profile['name']}: {packet.typ} {timestamp:.9f} {frame_index}")
 
         for profile in profiles:
             # remove all closing events at the beginning
@@ -199,9 +156,10 @@ class UcProf:
             while profile and profile['events'][0]['at'] == 0.0:
                 profile['events'].pop(0)
 
-        self.log_info(0, f'Profiles parsed: {len(profiles)}')
+        logger.info(f'Profiles parsed: {len(profiles)}')
         for profile in profiles:
-            print(f"  {profile['name']}: {len(profile['events'])} events")
+            logger.info(
+                f"  {profile['name']}: {len(profile['events'])} events")
 
         shared_frames.append(
             {"name": "OVERFLOW!", "file": "", "line": 0, "col": 1})
@@ -226,22 +184,15 @@ class UcProf:
             "exporter": "lukasnee/ucprof",
         }
 
-    def __print_call_stack(self, call_stack, frames):
-        self.log_info(0, f"Call stack:")
-        for depth, frame in enumerate(call_stack):
-            indent = '  ' * depth
-            self.log_info(0, f"{indent}{frames[frame]['name']}")
-        self.log_info(0, f"")
-
-    def __log_opening_event(self, severity, verbosity, idx, timestamp, frame, call_stack, frames, suffix=""):
+    def __log_opening_event(self, log_level, idx, timestamp, frame, call_stack, frames, suffix=""):
         indent = '  ' * len(call_stack)
-        self.log(severity, verbosity,
-                 f"{idx:8d}|{timestamp:.9f}|{indent}{frame['name']}{': ' if suffix else ''}{suffix}")
+        logger.log(log_level,
+                   f"{idx:8d}|{timestamp:.9f}|{indent}{frame['name']}{': ' if suffix else ''}{suffix}")
 
-    def __log_closing_event(self, severity, verbosity, idx, timestamp, frame, call_stack, frames, suffix=""):
+    def __log_closing_event(self, log_level, idx, timestamp, frame, call_stack, frames, suffix=""):
         indent = '  ' * len(call_stack)
-        self.log(severity, verbosity,
-                 f"{idx:8d}|{timestamp:.9f}|{indent}~{frame['name']}{': ' if suffix else ''}{suffix}")
+        logger.log(log_level,
+                   f"{idx:8d}|{timestamp:.9f}|{indent}~{frame['name']}{': ' if suffix else ''}{suffix}")
 
     def __fix_events(self, events, frames):
 
@@ -264,39 +215,40 @@ class UcProf:
                 # TODO make the breaks more visible in the speedscope GUI
                 if not call_stack:
                     self.__log_closing_event(
-                        "W", 1, idx, event['at'], frames[event['frame']], call_stack, frames, "Call stack is empty - skipping")
+                        logging.WARNING-1, idx, event['at'], frames[event['frame']], call_stack, frames, "Call stack is empty - skipping")
                     call_stack = []
                     continue
                 if call_stack[-1] != event['frame']:
-                    self.log_warning(
-                        1, f"Call stack inconsistent on {idx} event: tried to close '{frames[event['frame']]['name']}' instead of '{frames[call_stack[-1]]['name']}'")
-                    self.log_info(1, "Stack termination (begin)")
+                    logger.log(logging.WARNING-1,
+                               f"Call stack inconsistent on {idx} event: tried to close '{frames[event['frame']]['name']}' instead of '{frames[call_stack[-1]]['name']}'")
+                    logger.log(
+                        logging.INFO-1, "Stack termination (begin)")
                     for frame in reversed(call_stack):
                         fixed_events.append(
                             {"type": "C", "at": events[idx-1]['at'], "frame": frame})
                         call_stack.pop()
                         self.__log_closing_event(
-                            "I", 1, idx, event['at'], frames[frame], call_stack, frames)
-                    self.log_info(1, "Stack termination (end)")
+                            logging.INFO-1, idx, event['at'], frames[frame], call_stack, frames)
+                    logger.log(logging.INFO-1, "Stack termination (end)")
                     fixed_events.append(
                         {"type": "O", "at": events[idx-1]['at'], "frame": self.overflow_frame_index})
                     self.__log_opening_event(
-                        "I", 1, idx, event['at'], frames[self.overflow_frame_index], call_stack, frames)
+                        logging.INFO-1, idx, event['at'], frames[self.overflow_frame_index], call_stack, frames)
                     overflow = True
                     continue
                 fixed_events.append(event)
                 call_stack.pop()
                 self.__log_closing_event(
-                    "I", 1, idx, event['at'], frames[event['frame']], call_stack, frames)
+                    logging.INFO-1, idx, event['at'], frames[event['frame']], call_stack, frames)
             else:
                 if overflow:
                     fixed_events.append(
                         {"type": "C", "at": event['at'], "frame": self.overflow_frame_index})
                     self.__log_closing_event(
-                        "I", 1, idx, event['at'], frames[self.overflow_frame_index], call_stack, frames)
+                        logging.INFO-1, idx, event['at'], frames[self.overflow_frame_index], call_stack, frames)
                     overflow = False
                 self.__log_opening_event(
-                    "I", 1, idx, event['at'], frames[event['frame']], call_stack, frames)
+                    logging.INFO-1, idx, event['at'], frames[event['frame']], call_stack, frames)
                 fixed_events.append(event)
                 call_stack.append(event['frame'])
 
@@ -311,17 +263,16 @@ class UcProf:
         with open(filename, "w") as f:
             json.dump(speedscope_dict, f, indent=2)
 
-    def fold_all_stacks(self, args):
-        if not args.nm_symbols_path or not args.frame_data_path:
-            self.log_info(0, "Please provide both input file paths.")
+    def fold_all_stacks(self):
+        if not self.args.nm_symbols_path or not self.args.frame_data_path:
+            logger.info("Please provide both input file paths.")
             return
-        self.args = args
         symbols = self.__parse_nm_symbols()
         packets = self.__read_packets_from_file()
         speedscope_dict = self.__parse_packets(symbols, packets)
-        filename = f"{args.frame_data_path.split('/')[-1].split('.')[0]}.json"
+        filename = f"{self.args.frame_data_path.split('/')[-1].split('.')[0]}.json"
         self.__export_to_json(speedscope_dict, filename)
-        print(f"Exported {filename}")
+        logger.info(f"Exported {filename}")
 
 
 if __name__ == "__main__":
@@ -334,12 +285,12 @@ if __name__ == "__main__":
     parser.add_argument("--end", type=float, help="Timestamp to in seconds")
     parser.add_argument("--clk_freq", type=int, default=480000000,
                         help="Clock frequency used for timestamps")
-    parser.add_argument("--verbosity", "-v", type=int, default=0)
+    parser.add_argument("--log-level", type=int, default=logging.INFO)
     parser.add_argument("--fw_base", type=int, default=0x24000000)
     parser.add_argument("--fw_size", type=int, default=0x80000)
     parser.add_argument("--no_color", action="store_true")
     parser.add_argument("--top", type=int, default=10,
                         help="Process only the top most eventful threads")
     args = parser.parse_args()
-    ucProf = UcProf()
-    ucProf.fold_all_stacks(args)
+    ucProf = UcProf(args)
+    ucProf.fold_all_stacks()
