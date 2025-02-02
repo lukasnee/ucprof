@@ -19,13 +19,13 @@ Microcontroller C/C++ runtime execution profiling toolkit using GNU instrumentat
 3. Generate symbols file:
 
     ```bash
-    arm-none-eabi-nm -lnC .build/platform/STM32H750/STM32H750 > .build/platform/STM32H750/STM32H750.symbols
+    arm-none-eabi-nm -lnC .build/source/m8ec > .build/source/m8ec.symbols
     ```
 
 4. Fold stacks of all thread calls in `ucprof.dat` record and export a Speedscope JSON for each thread:
 
     ```bash
-    python3 ucprof.py .build/platform/STM32H750/STM32H750.symbols ucprof.dat
+    python3 ucprof.py .build/source/m8ec.symbols ucprof.dat
     ```
 
 5. Open `ucprof_*.json`  in [Speedscope](https://www.speedscope.app/).
