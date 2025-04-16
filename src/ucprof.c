@@ -10,11 +10,24 @@ http://opensource.org/licenses/MIT.
 #include "ucprof/ucprof_config_default.h"
 #include "ucprof_config.h"
 
-#include "SEGGER_RTT.h"
-#include "SEGGER_SYSVIEW.h"
-
 #include "FreeRTOS.h"
 #include "task.h"
+
+#include "stm32h7xx_hal.h"
+
+// TODO: research https://orbcode.org/orbuculum/swo-code-instrumentation/ and
+// Orbuculum in general.
+
+#define ITM_IS_ENABLED() ((ITM->TCR & ITM_TCR_ITMENA_Msk) != 0UL)
+#define ITM_IS_PORT_ENABLED(port) ((ITM->TER & (1UL << (port))) != 0UL)
+
+#define ITM_IS_PORT_READY(port) ITM_IS_ENABLED() && ITM_IS_PORT_ENABLED((port))
+
+#define ITM_SEND_WORD(port, value)                                                                                             \
+    while (ITM->PORT[(port)].u32 == 0UL) {                                                                                     \
+        __NOP();                                                                                                               \
+    }                                                                                                                          \
+    ITM->PORT[(port)].u32 = (value)
 
 #include <stdint.h>
 
@@ -22,37 +35,56 @@ http://opensource.org/licenses/MIT.
 #define UNUSED(x) (void)(x)
 #endif
 
-const unsigned ucprof_rtt_buffer_idx = 2;
+// Attention: performance is of utmost importance
+const uint8_t itm_port_trace = 0;
 
 #pragma pack(push, 1)
-typedef struct profile_packet_ {
-    unsigned char label[4];
-    uint32_t timestamp;
-    uint32_t context;
-    void *this_fn;
-} profile_packet_t;
+typedef struct ucprof_packet_ {
+    union {
+        struct fields_t {
+#define UCPROF_TYPE_ENTER 0
+#define UCPROF_TYPE_EXIT 1
+            uint32_t type : 1;
+            uint32_t context : 7;
+            uint32_t fn : 24; // MSB shall be provided by the other packet
+            uint32_t cycle_count;
+        } fields;
+        uint32_t raw[2];
+    };
+} ucprof_packet_t;
 #pragma pack(pop)
 
 // Attention: performance is of utmost importance
 
-static profile_packet_t enter_profile_packet_buff = {{'O', '\0', '\0', '\0'}, 0, 0, 0};
-static profile_packet_t exit_profile_packet_buff = {{'C', '\0', '\0', '\0'}, 0, 0, 0};
+static ucprof_packet_t ucprof_enter_packet = {
+    .fields.type = UCPROF_TYPE_ENTER,
+    .fields.context = 0,
+    .fields.fn = 0,
+    .fields.cycle_count = 0,
+};
+
+static ucprof_packet_t ucprof_exit_packet = {
+    .fields.type = UCPROF_TYPE_EXIT,
+    .fields.context = 0,
+    .fields.fn = 0,
+    .fields.cycle_count = 0,
+};
 
 void __cyg_profile_func_enter(void *this_fn, void *call_site) {
     UNUSED(call_site);
     if (xPortIsInsideInterrupt()) {
         return;
     }
-    // TODO: investigate if this overhead is necessary or beneficial functionally.
-    // if (SEGGER_SYSVIEW_IsStarted() == 0) {
-    //     return;
-    // }
-    SEGGER_RTT_LOCK();
-    enter_profile_packet_buff.timestamp = SEGGER_SYSVIEW_GET_TIMESTAMP();
-    enter_profile_packet_buff.context = (uint32_t)xTaskGetCurrentTaskHandle();
-    enter_profile_packet_buff.this_fn = this_fn;
-    SEGGER_RTT_WriteNoLock(ucprof_rtt_buffer_idx, &enter_profile_packet_buff, sizeof(enter_profile_packet_buff));
-    SEGGER_RTT_UNLOCK();
+
+    if (ITM_IS_PORT_READY(itm_port_trace)) {
+        __disable_irq();
+        ucprof_enter_packet.fields.context = uxTaskGetTaskNumber(xTaskGetCurrentTaskHandle());
+        ucprof_enter_packet.fields.fn = (uint32_t)this_fn;
+        ucprof_enter_packet.fields.cycle_count = DWT->CYCCNT;
+        ITM_SEND_WORD(itm_port_trace, ucprof_enter_packet.raw[0]);
+        ITM_SEND_WORD(itm_port_trace, ucprof_enter_packet.raw[1]);
+        __enable_irq();
+    }
 }
 
 void __cyg_profile_func_exit(void *this_fn, void *call_site) {
@@ -60,21 +92,15 @@ void __cyg_profile_func_exit(void *this_fn, void *call_site) {
     if (xPortIsInsideInterrupt()) {
         return;
     }
-    // TODO: investigate if this overhead is necessary or beneficial functionally.
-    // if (SEGGER_SYSVIEW_IsStarted() == 0) {
-    //     return;
-    // }
-    SEGGER_RTT_LOCK();
-    exit_profile_packet_buff.timestamp = SEGGER_SYSVIEW_GET_TIMESTAMP();
-    exit_profile_packet_buff.context = (uint32_t)xTaskGetCurrentTaskHandle();
-    exit_profile_packet_buff.this_fn = this_fn;
-    SEGGER_RTT_WriteNoLock(ucprof_rtt_buffer_idx, &exit_profile_packet_buff, sizeof(exit_profile_packet_buff));
-    SEGGER_RTT_UNLOCK();
+    if (ITM_IS_PORT_READY(itm_port_trace)) {
+        __disable_irq();
+        ucprof_exit_packet.fields.context = uxTaskGetTaskNumber(xTaskGetCurrentTaskHandle());
+        ucprof_exit_packet.fields.fn = (uint32_t)this_fn;
+        ucprof_exit_packet.fields.cycle_count = DWT->CYCCNT;
+        ITM_SEND_WORD(itm_port_trace, ucprof_exit_packet.raw[0]);
+        ITM_SEND_WORD(itm_port_trace, ucprof_exit_packet.raw[1]);
+        __enable_irq();
+    }
 }
 
-uint8_t ucprof_rtt_buffer[UCPROF_CONFIG_RTT_BUFFER_SIZE];
-
-void ucprof_init() {
-    SEGGER_RTT_ConfigUpBuffer(ucprof_rtt_buffer_idx, "ucprof", ucprof_rtt_buffer, sizeof(ucprof_rtt_buffer),
-                              SEGGER_RTT_MODE_NO_BLOCK_TRIM);
-}
+void ucprof_init() {}

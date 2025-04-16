@@ -6,7 +6,3 @@ http://opensource.org/licenses/MIT.
 */
 
 #pragma once
-
-#ifndef UCPROF_CONFIG_RTT_BUFFER_SIZE
-#define UCPROF_CONFIG_RTT_BUFFER_SIZE (128 * 1024)
-#endif

@@ -14,11 +14,15 @@ if(SEGGER_SYSVIEW_ENABLED)
   target_sources(ucprof PRIVATE ucprof.c)
   target_include_directories(ucprof PUBLIC include)
   target_compile_options(
-    ucprof PRIVATE -finstrument-functions-exclude-file-list=ucprof
+    ucprof PRIVATE -O3 -finstrument-functions-exclude-file-list=ucprof
   )
-  target_link_libraries(ucprof PUBLIC freertos_kernel SeggerSysView ucprof_config)
+  target_link_libraries(
+    ucprof PUBLIC freertos_kernel SeggerSysView ucprof_config
+  )
 else()
   add_library(ucprof INTERFACE)
   target_include_directories(ucprof INTERFACE include)
-  target_link_libraries(ucprof INTERFACE freertos_kernel SeggerSysView ucprof_config)
+  target_link_libraries(
+    ucprof INTERFACE freertos_kernel SeggerSysView ucprof_config
+  )
 endif()
